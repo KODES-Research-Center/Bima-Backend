@@ -1,0 +1,215 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String   @id @default(uuid())
+  name       String
+  email      String   @unique
+  password   String
+  nationalId String?  @unique
+  phone      String   @unique
+  role       UserRole
+  country    String   @default("Kenya")
+  region     String?
+  language   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer      Customer?
+  agentPolicies Policy[]       @relation("AgentPolicies")
+  handlerClaims Claim[]        @relation("HandlerClaims")
+  notifications Notification[]
+  auditLogs     AuditLog[]
+}
+
+model Customer {
+  id           String   @id @default(uuid())
+  userId       String   @unique
+  idType       IDType
+  idNumber     String   @unique
+  gender       Gender
+  address      String
+  county       String
+  constituency String?
+  ward         String?
+  dateOfBirth  DateTime
+
+  user     User     @relation(fields: [userId], references: [id])
+  policies Policy[]
+  claims   Claim[]
+}
+
+model Policy {
+  id             String       @id @default(uuid())
+  customerId     String
+  agentId        String?
+  type           PolicyType
+  startDate      DateTime
+  endDate        DateTime
+  premium        Float
+  coverageAmount Float
+  currency       String       @default("KES")
+  status         PolicyStatus
+  createdAt      DateTime     @default(now())
+
+  customer  Customer      @relation(fields: [customerId], references: [id])
+  agent     User?         @relation("AgentPolicies", fields: [agentId], references: [id])
+  claims    Claim[]
+  payments  Payment[]
+  addOns    PolicyAddOn[]
+  auditLogs AuditLog[]
+}
+
+model PolicyAddOn {
+  id          String @id @default(uuid())
+  policyId    String
+  name        String
+  description String
+  price       Float
+
+  policy Policy @relation(fields: [policyId], references: [id])
+}
+
+model Claim {
+  id          String      @id @default(uuid())
+  policyId    String
+  CustomerId  String
+  handlerId   String?
+  description String
+  amount      Float
+  status      ClaimStatus
+  filedAt     DateTime
+  resolvedAt  DateTime?
+
+  policy    Policy          @relation(fields: [policyId], references: [id])
+  handler   User?           @relation("HandlerClaims", fields: [handlerId], references: [id])
+  documents ClaimDocument[]
+  auditLogs AuditLog[]
+
+  Customer Customer[]
+}
+
+model ClaimDocument {
+  id         String   @id @default(uuid())
+  claimId    String
+  fileUrl    String
+  fileType   String
+  uploadedAt DateTime @default(now())
+
+  claim Claim @relation(fields: [claimId], references: [id])
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  policyId  String
+  amount    Float
+  method    PaymentMethod
+  paidAt    DateTime      @default(now())
+  currency  String        @default("KES")
+  reference String? // M-Pesa code, Bank transaction ID
+
+  policy Policy @relation(fields: [policyId], references: [id])
+}
+
+model Notification {
+  id       String              @id @default(uuid())
+  userId   String
+  type     NotificationType
+  channel  NotificationChannel
+  language String? // "en", "sw", "fr"
+  message  String
+  sentAt   DateTime            @default(now())
+  isRead   Boolean             @default(false)
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  policyId  String?
+  claimId   String?
+  action    String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  user   User?   @relation(fields: [userId], references: [id])
+  policy Policy? @relation(fields: [policyId], references: [id])
+  claim  Claim?  @relation(fields: [claimId], references: [id])
+}
+
+enum UserRole {
+  ADMIN
+  AGENT
+  UNDERWRITER
+  CUSTOMER
+}
+
+enum PolicyStatus {
+  ACTIVE
+  PENDING
+  CANCELLED
+  EXPIRED
+}
+
+enum PolicyType {
+  LIFE
+  HEALTH
+  MOTOR
+  AGRICULTURE
+  PROPERTY
+}
+
+enum ClaimStatus {
+  FILED
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum PaymentMethod {
+  MPESA
+  AIRTEL_MONEY
+  BANK
+  CARD
+  CASH
+}
+
+enum NotificationType {
+  POLICY_STATUS
+  CLAIM_UPDATE
+  PAYMENT_RECEIPT
+  PROMOTION
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  IN_APP
+  USSD
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum IDType {
+  NATIONAL_ID
+  PASSPORT
+  ALIEN_ID
+}
